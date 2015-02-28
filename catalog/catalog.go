@@ -75,35 +75,51 @@ func (d *CatalogDir) Sync() (*CatalogDir, error) {
 	return d, nil
 }
 
-func (d *CatalogDir) Dir(name string) (*CatalogDir, error) {
+func (d *CatalogDir) TryDir(name string) (*CatalogDir, error) {
 	fp := filepath.Join(d.Path, name)
 	fi, err := os.Stat(fp)
 
-	cd := new(CatalogDir)
+	if err != nil || !fi.IsDir() {
+		return nil, errors.New("Dir does not exists.")
+	}
 
-	if err == nil && fi.IsDir() {
-		cd.Name = name
-		cd.Parent = d
-		cd.Path = fp
-		cd.subDir = make(map[string]*CatalogDir)
-		if _, err := cd.Sync(); err != nil {
-			return nil, err
-		}
-		d.subDir[name] = cd
-		return cd, nil
-	} // FIXME: err == nil && !fi.IsDir()
+	cd := &CatalogDir{
+		Name:   name,
+		Parent: d,
+		Path:   fp,
+		subDir: make(map[string]*CatalogDir),
+	}
+
+	if _, err := cd.Sync(); err != nil {
+		return nil, err
+	}
+	d.subDir[name] = cd
+	return cd, nil
+}
+
+func (d *CatalogDir) Dir(name string) (*CatalogDir, error) {
+	cd, err := d.TryDir(name)
+	if err == nil {
+		return cd, err
+	}
+
+	fp := filepath.Join(d.Path, name)
+
 	if err := os.Mkdir(fp, 0755); err != nil {
 		return nil, err
 	}
 
-	cd.Name = name
-	cd.Path = fp
-	cd.Parent = d
-	cd.subDir = make(map[string]*CatalogDir)
-
 	if _, ok := d.subDir[name]; ok {
 		panic("")
 	}
+
+	cd = &CatalogDir{
+		Name:   name,
+		Path:   fp,
+		Parent: d,
+		subDir: make(map[string]*CatalogDir),
+	}
+
 	d.subDir[name] = cd
 	return cd, nil
 }
