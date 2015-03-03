@@ -7,9 +7,9 @@ import (
 	"os"
 
 	"github.com/hamo/capsule/kernel"
+	"github.com/hamo/capsule/util"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/hamo/capsule/util"
 )
 
 var (
@@ -46,8 +46,8 @@ func cmdKernelImport(args []string, cmdEnv *CommandEnv) error {
 		flName    string
 		flVersion string
 
-		flKernel string
-		flModule string
+		flVmlinux string
+		flModule  string
 
 		flKPack string
 	)
@@ -55,8 +55,9 @@ func cmdKernelImport(args []string, cmdEnv *CommandEnv) error {
 	kernelImportFlag.StringVar(&flName, "name", "", "name")
 	kernelImportFlag.StringVar(&flVersion, "version", "", "version")
 
-	kernelImportFlag.StringVar(&flKernel, "kernel", "", "kernel path")
+	kernelImportFlag.StringVar(&flVmlinux, "vmlinux", "", "vmlinux path")
 	kernelImportFlag.StringVar(&flModule, "module", "", "module dir path")
+
 	kernelImportFlag.StringVar(&flKPack, "pack", "", "exported pack")
 
 	kernelImportFlag.Parse(args)
@@ -65,29 +66,30 @@ func cmdKernelImport(args []string, cmdEnv *CommandEnv) error {
 		cmdEnv.Logger.Fatalln("please provide name for this new kernel")
 	}
 
-	if flKernel == "" && flKPack == "" {
-		cmdEnv.Logger.Fatalln("Please provide kernel or pack path")
+	if flVmlinux == "" && flKPack == "" {
+		cmdEnv.Logger.Fatalln("Please provide vmlinux or pack path")
 	}
 
-	if flKernel != "" && flKPack != "" {
-		cmdEnv.Logger.Fatalln("Kernel and Pack can not be provided together")
+	if flVmlinux != "" && flKPack != "" {
+		cmdEnv.Logger.Fatalln("Vmlinux and Pack can not be provided together")
 	}
 
-	// Check kernel path
-	if flKernel != "" {
-		fi, err := os.Stat(flKernel)
+	// Import by providing vmlinux
+	if flVmlinux != "" {
+		fi, err := os.Stat(flVmlinux)
 		if err != nil || fi.IsDir() {
-			cmdEnv.Logger.Fatalln("can not read kernel file.")
+			cmdEnv.Logger.Fatalln("can not read vmlinux file.")
+		}
+
+		if flModule != "" {
+			fi, err := os.Stat(flModule)
+			if err != nil || !fi.IsDir() {
+				cmdEnv.Logger.Fatalln("can not read module dir.")
+			}
 		}
 	}
 
-	if flModule != "" {
-		fi, err := os.Stat(flModule)
-		if err != nil || !fi.IsDir() {
-			cmdEnv.Logger.Fatalln("can not read module dir.")
-		}
-	}
-
+	// Import by providing exported kernel pack
 	if flKPack != "" {
 		fi, err := os.Stat(flKPack)
 		if err != nil || fi.IsDir() {
@@ -103,6 +105,7 @@ func cmdKernelImport(args []string, cmdEnv *CommandEnv) error {
 		cmdEnv.Logger.Fatalf("kernel %s already exists, please try another name.", flName)
 	}
 
+	// FIXME: cleanup this dir if error happens.
 	newKernelCatalog, err := kernelCatalog.Dir(flName)
 	if err != nil {
 		cmdEnv.Logger.Fatalln("can not create new kernel catalog.")
@@ -110,15 +113,15 @@ func cmdKernelImport(args []string, cmdEnv *CommandEnv) error {
 
 	ki := new(kernel.KernelInfo)
 	ki.Name = flName
-	// FIXME:
-	ki.Note = "placeholder"
+	ki.Version = flVersion
 
+	// FIXME: support kernel pack import
 	vmlinux, err := newKernelCatalog.File("vmlinux")
 	if err != nil {
 		cmdEnv.Logger.Fatalln("can not create vmlinux file.")
 	}
 
-	if err := util.Copy(flKernel, vmlinux); err != nil {
+	if err := util.Copy(flVmlinux, vmlinux); err != nil {
 		cmdEnv.Logger.Fatalln("Copy kernel failed.")
 	}
 
@@ -164,7 +167,7 @@ func cmdKernelList(args []string, cmdEnv *CommandEnv) error {
 		}).Fatalln("can not read kernel catalog.")
 	}
 
-	for name, catalog := range kernelCatalog.Dirs() {
+	for _, catalog := range kernelCatalog.Dirs() {
 		fp, err := catalog.TryFile("info.json")
 		if err != nil {
 			continue
@@ -182,7 +185,7 @@ func cmdKernelList(args []string, cmdEnv *CommandEnv) error {
 			continue
 		}
 
-		cmdEnv.Logger.Infof("%s %s", name, kInfo.Note)
+		cmdEnv.Logger.Infof("%s %s", kInfo.Name, kInfo.Version)
 	}
 
 	return nil
