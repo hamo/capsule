@@ -35,6 +35,7 @@ func New(name string) *InstanceInfo {
 }
 
 func (i *InstanceInfo) Create() error {
+	// FIXME:
 	qemu, err := exec.LookPath("qemu-system-x86_64")
 	if err != nil {
 		return errors.New("can not find qemu")

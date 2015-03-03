@@ -14,8 +14,10 @@ type CatalogDir struct {
 
 	Parent *CatalogDir
 
-	subDir  map[string]*CatalogDir
-	subFile []string
+	subDir map[string]*CatalogDir
+
+	// whether cleanup file
+	subFile map[string]bool
 }
 
 func NewBaseCatalogDir(baseDir string, name string) (*CatalogDir, error) {
@@ -37,6 +39,7 @@ func NewBaseCatalogDir(baseDir string, name string) (*CatalogDir, error) {
 		cd.Parent = nil
 		cd.Path = fp
 		cd.subDir = make(map[string]*CatalogDir)
+		cd.subFile = make(map[string]bool)
 		return cd.Sync()
 	} else if err == nil && !fi.IsDir() {
 		return nil, fmt.Errorf("%s exists but not a dir.", fp)
@@ -45,10 +48,11 @@ func NewBaseCatalogDir(baseDir string, name string) (*CatalogDir, error) {
 			return nil, err
 		}
 		return &CatalogDir{
-			Name:   name,
-			Path:   fp,
-			Parent: nil,
-			subDir: make(map[string]*CatalogDir),
+			Name:    name,
+			Path:    fp,
+			Parent:  nil,
+			subDir:  make(map[string]*CatalogDir),
+			subFile: make(map[string]bool),
 		}, nil
 	}
 }
@@ -68,7 +72,7 @@ func (d *CatalogDir) Sync() (*CatalogDir, error) {
 		if fi.IsDir() {
 			d.Dir(fi.Name())
 		} else {
-			d.subFile = append(d.subFile, fi.Name())
+			d.subFile[fi.Name()] = false
 		}
 	}
 
@@ -76,6 +80,11 @@ func (d *CatalogDir) Sync() (*CatalogDir, error) {
 }
 
 func (d *CatalogDir) TryDir(name string) (*CatalogDir, error) {
+	cd, ok := d.subDir[name]
+	if ok {
+		return cd, nil
+	}
+
 	fp := filepath.Join(d.Path, name)
 	fi, err := os.Stat(fp)
 
@@ -83,11 +92,12 @@ func (d *CatalogDir) TryDir(name string) (*CatalogDir, error) {
 		return nil, errors.New("Dir does not exists.")
 	}
 
-	cd := &CatalogDir{
-		Name:   name,
-		Parent: d,
-		Path:   fp,
-		subDir: make(map[string]*CatalogDir),
+	cd = &CatalogDir{
+		Name:    name,
+		Parent:  d,
+		Path:    fp,
+		subDir:  make(map[string]*CatalogDir),
+		subFile: make(map[string]bool),
 	}
 
 	if _, err := cd.Sync(); err != nil {
@@ -114,26 +124,48 @@ func (d *CatalogDir) Dir(name string) (*CatalogDir, error) {
 	}
 
 	cd = &CatalogDir{
-		Name:   name,
-		Path:   fp,
-		Parent: d,
-		subDir: make(map[string]*CatalogDir),
+		Name:    name,
+		Path:    fp,
+		Parent:  d,
+		subDir:  make(map[string]*CatalogDir),
+		subFile: make(map[string]bool),
 	}
 
 	d.subDir[name] = cd
 	return cd, nil
 }
 
-func (d *CatalogDir) File(name string) (string, error) {
+func (d *CatalogDir) Dirs() map[string]*CatalogDir {
+	return d.subDir
+}
+
+func (d *CatalogDir) TryFile(name string) (string, error) {
 	fp := filepath.Join(d.Path, name)
+
+	if _, ok := d.subFile[name]; ok {
+		return fp, nil
+	}
+
 	fi, err := os.Stat(fp)
 
-	if err == nil && !fi.IsDir() {
-		d.subFile = append(d.subFile, name)
-		return fp, nil
-	} // FIXME: err == nil && fi.IsDir()
+	if err != nil || fi.IsDir() {
+		return "", errors.New("File does not exist.")
+	}
 
-	d.subFile = append(d.subFile, name)
+	// FIXME: cleanup
+	d.subFile[name] = false
+	return fp, nil
+}
+
+func (d *CatalogDir) File(name string) (string, error) {
+	if fp, err := d.TryFile(name); err == nil {
+		return fp, nil
+	}
+
+	fp := filepath.Join(d.Path, name)
+
+	// FIXME: cleanup
+	d.subFile[name] = false
 	return fp, nil
 }
 
