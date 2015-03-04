@@ -18,7 +18,7 @@ type InstanceInfo struct {
 	ExportConsole bool `json:"exportConsole"`
 
 	Catalog       *catalog.CatalogDir `json:"-"`
-	KernelCatalog *catalog.CatalogDir `josn:"-"`
+	KernelCatalog *catalog.CatalogDir `json:"-"`
 }
 
 func New(name string) *InstanceInfo {
