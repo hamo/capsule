@@ -13,13 +13,13 @@ import (
 type InstanceInfo struct {
 	Name string `json:"name"`
 
-	Kernel  string `json:"kernel"`
-	Initrd  string `json:"initrd"`
+	Kernel  string `json:"kenrel"`
 	Cmdline string `json:"cmdline"`
 
 	ExportConsole bool `json:"exportConsole"`
 
-	Catalog *catalog.CatalogDir `json:"-"`
+	Catalog       *catalog.CatalogDir `json:"-"`
+	KernelCatalog *catalog.CatalogDir `josn:"-"`
 }
 
 func New(name string) *InstanceInfo {
@@ -27,9 +27,6 @@ func New(name string) *InstanceInfo {
 		Name: name,
 
 		// FIXME:
-		Kernel: "/boot/vmlinuz-linux-lts",
-		Initrd: "/home/hamo/workspace/initrd.gz",
-
 		ExportConsole: true,
 	}
 }
@@ -43,12 +40,18 @@ func (i *InstanceInfo) Create() error {
 
 	cmd := exec.Command(qemu, "-enable-kvm", "-nographic")
 
-	if i.Kernel != "" {
-		cmd.Args = append(cmd.Args, "-kernel", i.Kernel)
+	kernelPath, err := i.KernelCatalog.TryFile("vmlinux", false)
+	if err != nil {
+		return errors.New("can not read vmlinux file.")
 	}
+	cmd.Args = append(cmd.Args, "-kernel", kernelPath)
 
-	if i.Initrd != "" {
-		cmd.Args = append(cmd.Args, "-initrd", i.Initrd)
+	initrdPath, err := i.KernelCatalog.TryFile("initrd", false)
+	if err == nil {
+		cmd.Args = append(cmd.Args, "-initrd", initrdPath)
+
+		// FIXME: initrd is too big so we need at least 512MB memory
+		cmd.Args = append(cmd.Args, "-m", "512")
 	}
 
 	if i.ExportConsole {
@@ -56,6 +59,7 @@ func (i *InstanceInfo) Create() error {
 		if err == nil {
 			cmd.Args = append(cmd.Args, "-chardev", "file,id=console,path="+consoleLog)
 			cmd.Args = append(cmd.Args, "-serial", "chardev:console")
+			// FIXME: ignore_loglevel?
 			i.Cmdline = i.Cmdline + " " + "console=ttyS0 ignore_loglevel"
 		}
 	}
@@ -66,7 +70,7 @@ func (i *InstanceInfo) Create() error {
 			"-device",
 			"virtio-serial",
 			"-chardev",
-			fmt.Sprintf("socket,path=%s,server,nowait,id=control", controlSocket),
+			"socket,server,nowait,id=control,path="+controlSocket,
 			"-device",
 			"virtserialport,chardev=control,nr=1",
 		)

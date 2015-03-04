@@ -20,14 +20,25 @@ func cmdCreate(args []string, cmdEnv *CommandEnv) error {
 
 	createFlag := flag.NewFlagSet("create command", flag.ExitOnError)
 
-	var flInstanceName string
+	var (
+		flInstanceName string
+		flKernelName   string
+
+		flCmdline string
+	)
 
 	createFlag.StringVar(&flInstanceName, "name", "", "instance name")
+	createFlag.StringVar(&flKernelName, "kernel", "", "kernel name")
+
+	createFlag.StringVar(&flCmdline, "cmdline", "", "cmdline")
 
 	createFlag.Parse(args)
 
 	if flInstanceName == "" {
 		logger.Fatalln("name")
+	}
+	if flKernelName == "" {
+		logger.Fatalln("kernel")
 	}
 
 	instancesCatalog, err := cmdEnv.BaseCatalog.Dir("instances")
@@ -44,8 +55,22 @@ func cmdCreate(args []string, cmdEnv *CommandEnv) error {
 		logger.Fatalln("create instance catalog failed.")
 	}
 
+	kernelsCatalog, err := cmdEnv.BaseCatalog.Dir("kernels")
+	if err != nil {
+		logger.Fatalln("can not read kernel catalog")
+	}
+
+	myKernelCatalog, err := kernelsCatalog.TryDir(flKernelName)
+	if err != nil {
+		logger.Fatalf("can not find kernel named %s.", flKernelName)
+	}
+
 	i := instance.New(flInstanceName)
+	i.Kernel = flKernelName
+	i.Cmdline = flCmdline
+
 	i.Catalog = myInstanceCatalog
+	i.KernelCatalog = myKernelCatalog
 
 	err = i.Create()
 	if err != nil {
