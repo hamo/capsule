@@ -52,7 +52,7 @@ func (i *InstanceInfo) Create() error {
 	}
 
 	if i.ExportConsole {
-		consoleLog, err := i.Catalog.File("console.log")
+		consoleLog, err := i.Catalog.File("console.log", false)
 		if err == nil {
 			cmd.Args = append(cmd.Args, "-chardev", "file,id=console,path="+consoleLog)
 			cmd.Args = append(cmd.Args, "-serial", "chardev:console")
@@ -60,7 +60,7 @@ func (i *InstanceInfo) Create() error {
 		}
 	}
 
-	controlSocket, err := i.Catalog.File("control.sock")
+	controlSocket, err := i.Catalog.File("control.sock", false)
 	if err == nil {
 		cmd.Args = append(cmd.Args,
 			"-device",
@@ -76,7 +76,7 @@ func (i *InstanceInfo) Create() error {
 	cmd.Args = append(cmd.Args, "-append", i.Cmdline)
 
 	// Save info
-	infoFile, err := i.Catalog.File("info.json")
+	infoFile, err := i.Catalog.File("info.json", false)
 	if err != nil {
 		return err
 	}

@@ -116,7 +116,7 @@ func cmdKernelImport(args []string, cmdEnv *CommandEnv) error {
 	ki.Version = flVersion
 
 	// FIXME: support kernel pack import
-	vmlinux, err := newKernelCatalog.File("vmlinux")
+	vmlinux, err := newKernelCatalog.File("vmlinux", false)
 	if err != nil {
 		cmdEnv.Logger.Fatalln("can not create vmlinux file.")
 	}
@@ -131,7 +131,7 @@ func cmdKernelImport(args []string, cmdEnv *CommandEnv) error {
 	}
 	defer os.Remove(initrdTmp)
 
-	initrd, err := newKernelCatalog.File("initrd")
+	initrd, err := newKernelCatalog.File("initrd", false)
 	if err != nil {
 		cmdEnv.Logger.Fatalln("can not create initrd file.")
 	}
@@ -139,7 +139,7 @@ func cmdKernelImport(args []string, cmdEnv *CommandEnv) error {
 		cmdEnv.Logger.Fatalln("Copy initrd failed.")
 	}
 
-	info, err := newKernelCatalog.File("info.json")
+	info, err := newKernelCatalog.File("info.json", false)
 	if err != nil {
 		cmdEnv.Logger.Fatalln("can not create info.json file.")
 	}
@@ -168,7 +168,7 @@ func cmdKernelList(args []string, cmdEnv *CommandEnv) error {
 	}
 
 	for _, catalog := range kernelCatalog.Dirs() {
-		fp, err := catalog.TryFile("info.json")
+		fp, err := catalog.TryFile("info.json", false)
 		if err != nil {
 			continue
 		}

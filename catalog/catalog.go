@@ -72,6 +72,8 @@ func (d *CatalogDir) Sync() (*CatalogDir, error) {
 		if fi.IsDir() {
 			d.Dir(fi.Name())
 		} else {
+			// If sync dir with files exist,
+			// set this file as not cleanup
 			d.subFile[fi.Name()] = false
 		}
 	}
@@ -135,14 +137,16 @@ func (d *CatalogDir) Dir(name string) (*CatalogDir, error) {
 	return cd, nil
 }
 
+// FIXME: review
 func (d *CatalogDir) Dirs() map[string]*CatalogDir {
 	return d.subDir
 }
 
-func (d *CatalogDir) TryFile(name string) (string, error) {
+func (d *CatalogDir) TryFile(name string, cleanup bool) (string, error) {
 	fp := filepath.Join(d.Path, name)
 
 	if _, ok := d.subFile[name]; ok {
+		d.subFile[name] = cleanup
 		return fp, nil
 	}
 
@@ -152,21 +156,46 @@ func (d *CatalogDir) TryFile(name string) (string, error) {
 		return "", errors.New("File does not exist.")
 	}
 
-	// FIXME: cleanup
-	d.subFile[name] = false
+	d.subFile[name] = cleanup
 	return fp, nil
 }
 
-func (d *CatalogDir) File(name string) (string, error) {
-	if fp, err := d.TryFile(name); err == nil {
+func (d *CatalogDir) File(name string, cleanup bool) (string, error) {
+	if fp, err := d.TryFile(name, cleanup); err == nil {
 		return fp, nil
 	}
 
 	fp := filepath.Join(d.Path, name)
 
-	// FIXME: cleanup
-	d.subFile[name] = false
+	d.subFile[name] = cleanup
 	return fp, nil
 }
 
-// FIXME: Clean
+func (d *CatalogDir) Cleanup(force bool) error {
+	// First, cleanup every sub dirs.
+	for _, dir := range d.subDir {
+		if err := dir.Cleanup(force); err != nil {
+			return err
+		}
+	}
+
+	// Then, remove all sub files.
+	for file, clean := range d.subFile {
+		if clean || force {
+			if err := os.Remove(filepath.Join(d.Path, file)); err != nil {
+				return err
+			}
+			delete(d.subFile, file)
+		}
+	}
+
+	if len(d.subFile) == 0 && len(d.subDir) == 0 {
+		if err := os.Remove(d.Path); err != nil {
+			return err
+		}
+		if d.Parent != nil {
+			delete(d.Parent.subDir, d.Name)
+		}
+	}
+	return nil
+}
