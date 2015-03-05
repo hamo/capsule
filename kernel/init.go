@@ -21,6 +21,7 @@ modprobe virtio_pci
 modprobe virtio_console
 
 # FIXME: mount root
+# FIXME: parse root from /proc/cmdline
 
 exec /capsuled
 `

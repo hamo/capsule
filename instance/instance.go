@@ -39,6 +39,10 @@ func (i *InstanceInfo) Create() error {
 
 	cmd := exec.Command(qemu, "-enable-kvm", "-nographic")
 
+	// Performance tuning
+	// FIXME: configurable
+	cmd.Args = append(cmd.Args, "-cpu", "qemu64,+ssse3,+sse4.1,+sse4.2,+x2apic")
+
 	kernelPath, err := i.KernelCatalog.TryFile("vmlinux", false)
 	if err != nil {
 		return errors.New("can not read vmlinux file.")
