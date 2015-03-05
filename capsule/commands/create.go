@@ -24,11 +24,15 @@ func cmdCreate(args []string, cmdEnv *CommandEnv) error {
 		flInstanceName string
 		flKernelName   string
 
+		flMemorySize int
+
 		flCmdline string
 	)
 
 	createFlag.StringVar(&flInstanceName, "name", "", "instance name")
 	createFlag.StringVar(&flKernelName, "kernel", "", "kernel name")
+
+	createFlag.IntVar(&flMemorySize, "m", 512, "memory size")
 
 	createFlag.StringVar(&flCmdline, "cmdline", "", "cmdline")
 
@@ -68,6 +72,14 @@ func cmdCreate(args []string, cmdEnv *CommandEnv) error {
 	i := instance.New(flInstanceName)
 	i.Kernel = flKernelName
 	i.Cmdline = flCmdline
+
+	if flMemorySize < 512 {
+		// FIXME: support huge initrd
+		cmdEnv.Logger.Infoln("force memory size to 512M. ")
+		i.MemorySize = 512
+	} else {
+		i.MemorySize = flMemorySize
+	}
 
 	i.Catalog = myInstanceCatalog
 	i.KernelCatalog = myKernelCatalog

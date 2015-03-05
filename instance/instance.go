@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"os/exec"
+	"strconv"
 
 	"github.com/hamo/capsule/catalog"
 )
@@ -14,6 +15,8 @@ type InstanceInfo struct {
 
 	Kernel  string `json:"kenrel"`
 	Cmdline string `json:"cmdline"`
+
+	MemorySize int `json:"memorySize"`
 
 	ExportConsole bool `json:"exportConsole"`
 
@@ -43,6 +46,8 @@ func (i *InstanceInfo) Create() error {
 	// FIXME: configurable
 	cmd.Args = append(cmd.Args, "-cpu", "qemu64,+ssse3,+sse4.1,+sse4.2,+x2apic")
 
+	cmd.Args = append(cmd.Args, "-m", strconv.Itoa(i.MemorySize))
+
 	kernelPath, err := i.KernelCatalog.TryFile("vmlinux", false)
 	if err != nil {
 		return errors.New("can not read vmlinux file.")
@@ -52,9 +57,6 @@ func (i *InstanceInfo) Create() error {
 	initrdPath, err := i.KernelCatalog.TryFile("initrd", false)
 	if err == nil {
 		cmd.Args = append(cmd.Args, "-initrd", initrdPath)
-
-		// FIXME: initrd is too big so we need at least 512MB memory
-		cmd.Args = append(cmd.Args, "-m", "512")
 	}
 
 	if i.ExportConsole {
