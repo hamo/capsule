@@ -20,6 +20,10 @@ modprobe virtio_ring
 modprobe virtio_pci
 modprobe virtio_console
 
+modprobe fscache
+modprobe 9pnet
+modprobe 9p
+
 # FIXME: mount root
 # FIXME: parse root from /proc/cmdline
 
