@@ -20,8 +20,10 @@ type InstanceInfo struct {
 
 	ExportConsole bool `json:"exportConsole"`
 
-	Catalog       *catalog.CatalogDir `json:"-"`
-	KernelCatalog *catalog.CatalogDir `json:"-"`
+	SysinitDir string `json:"-"`
+
+	InstanceCatalog *catalog.CatalogDir `json:"-"`
+	KernelCatalog   *catalog.CatalogDir `json:"-"`
 }
 
 func New(name string) *InstanceInfo {
@@ -60,7 +62,7 @@ func (i *InstanceInfo) Create() error {
 	}
 
 	if i.ExportConsole {
-		consoleLog, err := i.Catalog.File("console.log", false)
+		consoleLog, err := i.InstanceCatalog.File("console.log", false)
 		if err == nil {
 			cmd.Args = append(cmd.Args, "-chardev", "file,id=console,path="+consoleLog)
 			cmd.Args = append(cmd.Args, "-serial", "chardev:console")
@@ -69,7 +71,7 @@ func (i *InstanceInfo) Create() error {
 		}
 	}
 
-	controlSocket, err := i.Catalog.File("control.sock", false)
+	controlSocket, err := i.InstanceCatalog.File("control.sock", false)
 	if err == nil {
 		cmd.Args = append(cmd.Args,
 			"-device",
@@ -81,11 +83,19 @@ func (i *InstanceInfo) Create() error {
 		)
 	}
 
+	// capsuled
+	cmd.Args = append(cmd.Args,
+		"-fsdev",
+		"local,security_model=passthrough,id=sysinit,readonly,path="+i.SysinitDir,
+		"-device",
+		"virtio-9p-pci,fsdev=sysinit,mount_tag=sysinit",
+	)
+
 	// Cmdline
 	cmd.Args = append(cmd.Args, "-append", i.Cmdline)
 
 	// Save info
-	infoFile, err := i.Catalog.File("info.json", false)
+	infoFile, err := i.InstanceCatalog.File("info.json", false)
 	if err != nil {
 		return err
 	}

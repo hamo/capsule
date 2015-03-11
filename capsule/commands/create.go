@@ -2,8 +2,17 @@ package commands
 
 import (
 	"flag"
+	"net/rpc"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/hamo/capsule/instance"
+)
+
+var (
+	GlobalCapsuledDir  = filepath.Join("usr", "lib", "capsule", "libexec")
+	GlobalCapsuledPath = filepath.Join(GlobalCapsuledDir, "capsuled")
 )
 
 var createCommand CapsuleCommand = CapsuleCommand{
@@ -75,19 +84,56 @@ func cmdCreate(args []string, cmdEnv *CommandEnv) error {
 
 	if flMemorySize < 512 {
 		// FIXME: support huge initrd
-		cmdEnv.Logger.Infoln("force memory size to 512M. ")
+		cmdEnv.Logger.Infoln("workaround: force memory size to 512M. ")
 		i.MemorySize = 512
 	} else {
 		i.MemorySize = flMemorySize
 	}
 
-	i.Catalog = myInstanceCatalog
+	i.InstanceCatalog = myInstanceCatalog
 	i.KernelCatalog = myKernelCatalog
+
+	// Find capsuled
+	// it should be either placed $CAPSULE_ROOT/capsuled/capsuled or
+	// /usr/lib/capsule/libexec/capusled
+	// Pass its parent dir to qemu
+	capsuledDir := filepath.Join(cmdEnv.BaseCatalog.Path, "capsuled")
+	if fi, err := os.Stat(filepath.Join(capsuledDir, "capsuled")); err != nil || !fi.Mode().IsRegular() {
+		// Can not find capsuled at $CAPSULE_ROOT/capsuled/capsuled
+		if fi, err := os.Stat(GlobalCapsuledPath); err != nil || !fi.Mode().IsRegular() {
+			cmdEnv.Logger.Fatalln("can not find capsuled")
+		} else {
+			capsuledDir = GlobalCapsuledDir
+		}
+	}
+	i.SysinitDir = capsuledDir
 
 	err = i.Create()
 	if err != nil {
 		panic(err)
 	}
+
+	// FIXME: ugly workaround to wait for qemu start
+	time.Sleep(2 * time.Second)
+
+	controlSock, err := myInstanceCatalog.File("control.sock", false)
+	if err != nil {
+		panic(err)
+	}
+
+	client, err := rpc.Dial("unix", controlSock)
+	if err != nil {
+		panic(err)
+	}
+
+	var d time.Duration
+	err = client.Call("Server.Alive", struct{}{}, &d)
+	if err != nil {
+		panic(err)
+	}
+
+	cmdEnv.Logger.Infoln("Yoo, we are alive.")
+
 	return nil
 }
 

@@ -22,10 +22,15 @@ modprobe virtio_console
 
 modprobe fscache
 modprobe 9pnet
+modprobe 9pnet_virtio
 modprobe 9p
+
+# mount sysinit
+mkdir /sysinit
+mount -t 9p -o trans=virtio sysinit /sysinit
 
 # FIXME: mount root
 # FIXME: parse root from /proc/cmdline
 
-exec /capsuled
+exec /sysinit/capsuled
 `
