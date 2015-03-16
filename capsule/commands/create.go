@@ -2,6 +2,7 @@ package commands
 
 import (
 	"flag"
+	"fmt"
 	"net/rpc"
 	"os"
 	"path/filepath"
@@ -48,34 +49,41 @@ func cmdCreate(args []string, cmdEnv *CommandEnv) error {
 	createFlag.Parse(args)
 
 	if flInstanceName == "" {
-		logger.Fatalln("name")
+		fmt.Fprintf(os.Stderr, "Please provide new instance name.\n\n")
+		createFlag.PrintDefaults()
+		os.Exit(1)
 	}
+
 	if flKernelName == "" {
-		logger.Fatalln("kernel")
+		fmt.Fprintf(os.Stderr, "Please provide kernel name used by new instance.\n\n")
+		createFlag.PrintDefaults()
+		os.Exit(1)
 	}
 
 	instancesCatalog, err := cmdEnv.BaseCatalog.Dir("instances")
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatalf("create instances catalog failed: %s\n", err)
 	}
 
 	if _, err := instancesCatalog.TryDir(flInstanceName); err == nil {
-		logger.Fatalf("%s exists\n", flInstanceName)
+		logger.Fatalf("target instance name %s exists.\n", flInstanceName)
 	}
 
 	myInstanceCatalog, err := instancesCatalog.Dir(flInstanceName)
 	if err != nil {
-		logger.Fatalln("create instance catalog failed.")
+		logger.Fatalf("create target instance catalog failed: %s\n", err)
 	}
 
 	kernelsCatalog, err := cmdEnv.BaseCatalog.Dir("kernels")
 	if err != nil {
-		logger.Fatalln("can not read kernel catalog")
+		myInstanceCatalog.Cleanup(true)
+		logger.Fatalf("read kernels catalog failed: %s\n", err)
 	}
 
 	myKernelCatalog, err := kernelsCatalog.TryDir(flKernelName)
 	if err != nil {
-		logger.Fatalf("can not find kernel named %s.", flKernelName)
+		myInstanceCatalog.Cleanup(true)
+		logger.Fatalf("read kernel %s catalog failed: %s\n", flKernelName, err)
 	}
 
 	i := instance.New(flInstanceName)
