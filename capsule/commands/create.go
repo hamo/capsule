@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/hamo/capsule/instance"
+
+	"github.com/Sirupsen/logrus"
 )
 
 var (
@@ -62,28 +64,28 @@ func cmdCreate(args []string, cmdEnv *CommandEnv) error {
 
 	instancesCatalog, err := cmdEnv.BaseCatalog.Dir("instances")
 	if err != nil {
-		logger.Fatalf("create instances catalog failed: %s\n", err)
+		logger.Fatalf("create instances catalog failed: %s", err)
 	}
 
 	if _, err := instancesCatalog.TryDir(flInstanceName); err == nil {
-		logger.Fatalf("target instance name %s exists.\n", flInstanceName)
+		logger.Fatalf("target instance name %s exists", flInstanceName)
 	}
 
 	myInstanceCatalog, err := instancesCatalog.Dir(flInstanceName)
 	if err != nil {
-		logger.Fatalf("create target instance catalog failed: %s\n", err)
+		logger.Fatalf("create target instance catalog failed: %s", err)
 	}
 
 	kernelsCatalog, err := cmdEnv.BaseCatalog.Dir("kernels")
 	if err != nil {
 		myInstanceCatalog.Cleanup(true)
-		logger.Fatalf("read kernels catalog failed: %s\n", err)
+		logger.Fatalf("read kernels catalog failed: %s", err)
 	}
 
 	myKernelCatalog, err := kernelsCatalog.TryDir(flKernelName)
 	if err != nil {
 		myInstanceCatalog.Cleanup(true)
-		logger.Fatalf("read kernel %s catalog failed: %s\n", flKernelName, err)
+		logger.Fatalf("read kernel %s catalog failed: %s", flKernelName, err)
 	}
 
 	i := instance.New(flInstanceName)
@@ -92,7 +94,7 @@ func cmdCreate(args []string, cmdEnv *CommandEnv) error {
 
 	if flMemorySize < 512 {
 		// FIXME: support huge initrd
-		cmdEnv.Logger.Infoln("workaround: force memory size to 512M. ")
+		cmdEnv.Logger.Infoln("workaround: force memory size to 512M")
 		i.MemorySize = 512
 	} else {
 		i.MemorySize = flMemorySize
@@ -109,6 +111,7 @@ func cmdCreate(args []string, cmdEnv *CommandEnv) error {
 	if fi, err := os.Stat(filepath.Join(capsuledDir, "capsuled")); err != nil || !fi.Mode().IsRegular() {
 		// Can not find capsuled at $CAPSULE_ROOT/capsuled/capsuled
 		if fi, err := os.Stat(GlobalCapsuledPath); err != nil || !fi.Mode().IsRegular() {
+			myInstanceCatalog.Cleanup(true)
 			cmdEnv.Logger.Fatalln("can not find capsuled")
 		} else {
 			capsuledDir = GlobalCapsuledDir
@@ -118,29 +121,57 @@ func cmdCreate(args []string, cmdEnv *CommandEnv) error {
 
 	err = i.Create()
 	if err != nil {
-		panic(err)
+		myInstanceCatalog.Cleanup(true)
+		cmdEnv.Logger.Fatalf("create instance failed: %s", err)
 	}
 
-	// FIXME: ugly workaround to wait for qemu start
-	time.Sleep(2 * time.Second)
+	retryTimes := 5
+	retryTicker := time.NewTicker(2 * time.Second)
+	retryPass := false
 
-	controlSock, err := myInstanceCatalog.File("control.sock", false)
-	if err != nil {
-		panic(err)
+	var rpcClient *rpc.Client
+
+	for _ = range retryTicker.C {
+		if retryTimes == 0 {
+			break
+		}
+
+		controlSock, err := myInstanceCatalog.TryFile("control.sock", false)
+		if err != nil {
+			retryTimes -= 1
+			cmdEnv.Logger.Debugf("try to open control socket failed: %s", err)
+			continue
+		}
+
+		rpcClient, err = rpc.Dial("unix", controlSock)
+		if err != nil {
+			retryTimes -= 1
+			cmdEnv.Logger.Debugf("try to dial control socket failed: %s", err)
+			continue
+		}
+		cmdEnv.Logger.Debugf("dial control socket success")
+		retryPass = true
+		break
 	}
 
-	client, err := rpc.Dial("unix", controlSock)
-	if err != nil {
-		panic(err)
+	retryTicker.Stop()
+	if !retryPass {
+		cmdEnv.Logger.Debugln("leave instance catalog for debugging.")
+		if cmdEnv.Logger.Level != logrus.DebugLevel {
+			myInstanceCatalog.Cleanup(true)
+		}
+		cmdEnv.Logger.Fatalf("instance starts but can not be connected.")
 	}
 
 	var d time.Duration
-	err = client.Call("Server.Alive", struct{}{}, &d)
+	err = rpcClient.Call("Server.Alive", struct{}{}, &d)
 	if err != nil {
-		panic(err)
+		cmdEnv.Logger.Fatalf("rpc call failed: %s", err)
 	}
 
 	cmdEnv.Logger.Infoln("Yoo, we are alive.")
+
+	myInstanceCatalog.Cleanup(false)
 
 	return nil
 }
