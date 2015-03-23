@@ -36,7 +36,8 @@ func New(name string) *InstanceInfo {
 }
 
 func (i *InstanceInfo) Create() error {
-	// FIXME:
+	// FIXME: Move qemu related codes to a package
+	// and abstract one interface for different engine
 	qemu, err := exec.LookPath("qemu-system-x86_64")
 	if err != nil {
 		return errors.New("can not find qemu")
